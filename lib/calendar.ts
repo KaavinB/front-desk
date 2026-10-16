@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { parseIcs } from "./ics";
+import bundledCalendar from "../data/appointments.json";
 
 /** One appointment on the office calendar. Times are ISO strings with offset. */
 export type Appointment = {
@@ -22,11 +23,12 @@ const ICS_TTL_MS = 60_000;
 /**
  * The office calendar. With CALENDAR_ICS_URL set, it is the ICS feed every major
  * calendar publishes (Google Calendar "secret address", Outlook, Calendly,
- * practice-management tools), refreshed every minute. Otherwise
- * data/appointments.json. A broken feed falls back to the last good copy, then
- * to the JSON file, so a calendar outage never silences the door.
+ * practice-management tools), refreshed every minute. Otherwise CALENDAR_FILE
+ * (default data/appointments.json), and if that file isn't on disk (serverless
+ * deploys), the copy bundled into the build. A broken feed falls back to the
+ * last good copy, then to the file, so a calendar outage never silences the door.
  */
-export async function loadCalendar(dataDir = process.env.DATA_DIR ?? "./data"): Promise<Calendar> {
+export async function loadCalendar(): Promise<Calendar> {
   const url = process.env.CALENDAR_ICS_URL;
   if (url) {
     if (icsCache && icsCache.url === url && Date.now() - icsCache.at < ICS_TTL_MS) return icsCache.value;
@@ -39,8 +41,13 @@ export async function loadCalendar(dataDir = process.env.DATA_DIR ?? "./data"): 
       if (icsCache?.url === url) return icsCache.value;
     }
   }
-  const raw = await fs.readFile(path.join(dataDir, "appointments.json"), "utf8");
-  return JSON.parse(raw) as Calendar;
+  const file = process.env.CALENDAR_FILE ?? path.join("data", "appointments.json");
+  try {
+    return JSON.parse(await fs.readFile(file, "utf8")) as Calendar;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+    return bundledCalendar as Calendar;
+  }
 }
 
 async function loadIcs(source: string): Promise<Calendar> {

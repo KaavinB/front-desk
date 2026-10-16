@@ -64,11 +64,12 @@ export function VisitorLog({ timeZone }: { timeZone: string }) {
               <span className="lane">{LANE_LABEL[d.lane] ?? d.lane}</span>
               <span className="meta">{fmt(e.eventAt, timeZone)}</span>
             </div>
-            <div className="headline">{d.headline}</div>
+            <div className="headline">{e.notice?.text ?? d.headline}</div>
             <div className="meta">
               {e.eventType}
               {e.subType ? `.${e.subType}` : ""}
               {d.candidate ? ` · host ${d.candidate.host}` : ""}
+              {e.notice?.writer === "bedrock" ? " · written by Bedrock" : ""}
               {e.notified?.length ? ` · sent to ${e.notified.map((n) => n.channel).join(", ")}` : ""}
             </div>
             {e.snapshotPath ? (

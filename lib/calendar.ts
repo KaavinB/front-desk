@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { parseIcs } from "./ics";
 
 /** One appointment on the office calendar. Times are ISO strings with offset. */
 export type Appointment = {
@@ -15,14 +16,43 @@ export type Appointment = {
 
 export type Calendar = { appointments: Appointment[] };
 
+let icsCache: { url: string; at: number; value: Calendar } | null = null;
+const ICS_TTL_MS = 60_000;
+
 /**
- * Loads appointments from data/appointments.json. This is the seam where a
- * Google Calendar / Calendly / practice-management sync plugs in later.
+ * The office calendar. With CALENDAR_ICS_URL set, it is the ICS feed every major
+ * calendar publishes (Google Calendar "secret address", Outlook, Calendly,
+ * practice-management tools), refreshed every minute. Otherwise
+ * data/appointments.json. A broken feed falls back to the last good copy, then
+ * to the JSON file, so a calendar outage never silences the door.
  */
 export async function loadCalendar(dataDir = process.env.DATA_DIR ?? "./data"): Promise<Calendar> {
-  const file = path.join(dataDir, "appointments.json");
-  const raw = await fs.readFile(file, "utf8");
+  const url = process.env.CALENDAR_ICS_URL;
+  if (url) {
+    if (icsCache && icsCache.url === url && Date.now() - icsCache.at < ICS_TTL_MS) return icsCache.value;
+    try {
+      const value = await loadIcs(url);
+      icsCache = { url, at: Date.now(), value };
+      return value;
+    } catch (e) {
+      console.error("calendar feed failed:", e instanceof Error ? e.message : e);
+      if (icsCache?.url === url) return icsCache.value;
+    }
+  }
+  const raw = await fs.readFile(path.join(dataDir, "appointments.json"), "utf8");
   return JSON.parse(raw) as Calendar;
+}
+
+async function loadIcs(source: string): Promise<Calendar> {
+  const timeZone = process.env.OFFICE_TIMEZONE ?? "America/Los_Angeles";
+  const text = /^https?:\/\//.test(source)
+    ? await (async () => {
+        const res = await fetch(source, { signal: AbortSignal.timeout(10_000) });
+        if (!res.ok) throw new Error(`ICS feed ${res.status}`);
+        return res.text();
+      })()
+    : await fs.readFile(source, "utf8");
+  return { appointments: parseIcs(text, { defaultTimeZone: timeZone }) };
 }
 
 export type MatchWindow = { earlyMin: number; lateMin: number };

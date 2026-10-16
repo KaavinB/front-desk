@@ -1,10 +1,18 @@
 import type { Decision } from "./matcher";
+import { writeNoticeWithBedrock } from "./bedrock";
 
 /**
- * Compose the message the host sees. Bedrock plugs in here later to make it warmer
- * and to add context (e.g. "first visit", "running 10 min late"). The template is
- * always the fallback so the app works with no AWS credentials.
+ * The message the host sees: Bedrock's wording when configured, the template
+ * otherwise. The template is always the fallback so the app works with no AWS
+ * credentials, and the facts never come from the model.
  */
+export async function composeNotice(d: Decision, officeName: string): Promise<{ text: string; writer: "bedrock" | "template" }> {
+  const text = await writeNoticeWithBedrock(d, officeName);
+  if (text) return { text, writer: "bedrock" };
+  return { text: composeMessage(d, officeName), writer: "template" };
+}
+
+/** Deterministic template version of the notice. */
 export function composeMessage(d: Decision, officeName: string): string {
   const lines = [d.headline];
   if (d.lane === "appointment" && d.candidate) {

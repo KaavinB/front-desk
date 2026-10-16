@@ -5,7 +5,7 @@ import { RingWebhookSchema } from "@/lib/ring/types";
 import { loadCalendar } from "@/lib/calendar";
 import { decide } from "@/lib/matcher";
 import { appendEntry, updateEntry } from "@/lib/store";
-import { composeMessage, notifySlack } from "@/lib/notify";
+import { composeNotice, notifySlack } from "@/lib/notify";
 import { matchWindow, officeHours, officeName, verifySignatures } from "@/lib/config";
 import { attachSnapshot } from "@/lib/snapshots";
 
@@ -59,11 +59,13 @@ export async function POST(req: Request) {
   // Fire-and-forget: snapshot and notifications must not delay the 200.
   if (decision.lane !== "device") {
     void attachSnapshot(entry.id);
-    void notifySlack(composeMessage(decision, officeName()))
-      .then((sent) => {
-        if (sent) return updateEntry(entry.id, { notified: [{ channel: "slack", at: new Date().toISOString() }] });
+    void composeNotice(decision, officeName())
+      .then(async ({ text, writer }) => {
+        await updateEntry(entry.id, { notice: { text, writer } });
+        const sent = await notifySlack(text);
+        if (sent) await updateEntry(entry.id, { notified: [{ channel: "slack", at: new Date().toISOString() }] });
       })
-      .catch((err) => console.error("slack notify failed", err));
+      .catch((err) => console.error("notify failed", err));
   }
 
   return NextResponse.json({ ok: true, id: entry.id, lane: decision.lane, headline: decision.headline });

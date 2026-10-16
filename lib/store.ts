@@ -15,6 +15,8 @@ export type LogEntry = {
   /** Host feedback: confirmed the guess, picked another appointment, or said "not them". */
   confirmation?: { appointmentId: string | null; by: string; at: string };
   snapshotPath?: string;
+  /** The sentence the host received, and who wrote it. */
+  notice?: { text: string; writer: "bedrock" | "template" };
   notified?: { channel: string; at: string }[];
 };
 

@@ -7,7 +7,7 @@ task, steps, expected vs. actual, severity, workaround, suggestion. Add entries 
 - **Task:** Exercise the `button_press` webhook handler end to end without hardware.
 - **Steps:** Generated a Playground token, read the webhook v1.1 docs, looked for a "send test event" control.
 - **Expected:** A way to fire a signed `button_press` / `motion_detected` webhook at my URL.
-- **Actual:** The Playground simulates live-view sessions only (secondhand reports from other developers; verify on first login). Event History shows `on_demand` events, not dings.
+- **Actual (verified):** The Playground's section 3 offers "Simulate live view event" with Package / Vehicle / Motion. Clicking **Motion** produced only an `on_demand` Event History entry with `cv_detections: []`, identical to opening a plain live view. No `motion` or `ding` event, and nothing is delivered to a webhook URL (there is nowhere to enter one).
 - **Severity:** High. The core event for any doorbell app cannot be produced officially.
 - **Workaround:** `scripts/simulate.ts` builds v1.1 payloads and signs them with HMAC-SHA256, exactly as Ring does.
 - **Suggestion:** Add "Send test webhook" buttons (button_press, motion_detected per sub_type, device_offline) to the Playground, pointed at a developer-entered URL.

@@ -18,6 +18,8 @@ export type LogEntry = {
   /** The sentence the host received, and who wrote it. */
   notice?: { text: string; writer: "bedrock" | "template" };
   notified?: { channel: string; at: string }[];
+  /** Whether the chime greeting played for this visit. */
+  greeted?: { played: boolean; detail: string; at: string };
 };
 
 /**

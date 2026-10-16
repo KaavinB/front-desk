@@ -70,6 +70,7 @@ export function VisitorLog({ timeZone }: { timeZone: string }) {
               {e.subType ? `.${e.subType}` : ""}
               {d.candidate ? ` · host ${d.candidate.host}` : ""}
               {e.notice?.writer === "bedrock" ? " · written by Bedrock" : ""}
+              {e.greeted?.played ? ` · greeted (${e.greeted.detail})` : ""}
               {e.notified?.length ? ` · sent to ${e.notified.map((n) => n.channel).join(", ")}` : ""}
             </div>
             {e.snapshotPath ? (

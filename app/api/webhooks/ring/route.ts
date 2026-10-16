@@ -8,6 +8,7 @@ import { appendEntry, updateEntry } from "@/lib/store";
 import { composeNotice, notifySlack } from "@/lib/notify";
 import { matchWindow, officeHours, officeName, verifySignatures } from "@/lib/config";
 import { attachSnapshot } from "@/lib/snapshots";
+import { greetVisitor } from "@/lib/ring/chime";
 
 export const runtime = "nodejs";
 
@@ -56,9 +57,23 @@ export async function POST(req: Request) {
   const fresh = await appendEntry(entry);
   if (!fresh) return NextResponse.json({ ok: true, duplicate: true });
 
-  // Fire-and-forget: snapshot and notifications must not delay the 200.
+  // Fire-and-forget: snapshot, greeting and notifications must not delay the 200.
   if (decision.lane !== "device") {
     void attachSnapshot(entry.id);
+    // Greet expected visitors only: a courier or a stranger gets no "take a seat".
+    if (decision.lane === "appointment") {
+      void greetVisitor()
+        .then((r) =>
+          updateEntry(entry.id, {
+            greeted: {
+              played: r.played,
+              detail: r.played ? `${r.clip} on ${r.chime}` : r.reason + (r.detail ? `: ${r.detail}` : ""),
+              at: new Date().toISOString(),
+            },
+          }),
+        )
+        .catch((err) => console.error("greeting failed", err));
+    }
     void composeNotice(decision, officeName())
       .then(async ({ text, writer }) => {
         await updateEntry(entry.id, { notice: { text, writer } });

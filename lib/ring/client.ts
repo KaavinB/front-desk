@@ -163,11 +163,43 @@ export async function stopWhepSession(sessionUrl: string): Promise<void> {
   await ringFetch(path, { method: "DELETE" }).catch(() => undefined);
 }
 
-/** Play a pre-uploaded audio slot on a Ring Chime. Requires the Chime Controls capability. */
-export async function playChimeAudio(chimeId: string, audioRef: string): Promise<void> {
-  await ringFetch(`/v1/devices/${encodeURIComponent(chimeId)}/media/audio/playback`, {
+export type DeviceCapabilities = {
+  data?: { attributes?: { audio?: { customizable_slots?: number | null } | null } };
+};
+
+export async function getDeviceCapabilities(deviceId: string): Promise<DeviceCapabilities> {
+  const res = await ringFetch(`/v1/devices/${encodeURIComponent(deviceId)}/capabilities`);
+  return (await res.json()) as DeviceCapabilities;
+}
+
+export type ChimeSlot = {
+  event: string;
+  disabled: boolean;
+  audio_ref: string;
+  audio_url?: string;
+  audio_name?: string;
+};
+
+export type DeviceConfigurations = {
+  data?: { attributes?: { audio?: { customizable_slots?: ChimeSlot[] | null; volume?: number } | null } };
+};
+
+export async function getDeviceConfigurations(deviceId: string): Promise<DeviceConfigurations> {
+  const res = await ringFetch(`/v1/devices/${encodeURIComponent(deviceId)}/configurations`);
+  return (await res.json()) as DeviceConfigurations;
+}
+
+/**
+ * Play one of a Ring Chime's audio slots. Requires the Chime Controls capability.
+ * `audioRef` comes from configurations → audio.customizable_slots[].audio_ref.
+ * The call is synchronous: a 200 with status "completed" means the chime played it.
+ */
+export async function playChimeAudio(chimeId: string, audioRef: string): Promise<"completed" | string> {
+  const res = await ringFetch(`/v1/devices/${encodeURIComponent(chimeId)}/media/audio/playback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ audio_ref: audioRef }),
+    body: JSON.stringify({ data: { type: "audio", attributes: { audio_ref: audioRef } } }),
   });
+  const json = (await res.json()) as { data?: { attributes?: { status?: string } } };
+  return json.data?.attributes?.status ?? "unknown";
 }

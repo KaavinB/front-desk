@@ -5,7 +5,7 @@
  *   RING_ACCESS_TOKEN=eyJ... npm run ring:probe
  */
 import "dotenv/config";
-import { getDeviceStatus, getEventHistory, listDevices, RingApiError } from "../lib/ring/client";
+import { getDeviceCapabilities, getDeviceStatus, getEventHistory, listDevices, RingApiError } from "../lib/ring/client";
 
 async function main() {
   const devices = await listDevices();
@@ -17,6 +17,13 @@ async function main() {
       console.log("  status:", JSON.stringify(await getDeviceStatus(d.id)));
     } catch (e) {
       console.log("  status: failed", e instanceof RingApiError ? e.status : e);
+    }
+    try {
+      const caps = await getDeviceCapabilities(d.id);
+      const slots = caps.data?.attributes?.audio?.customizable_slots ?? 0;
+      console.log(`  chime: ${slots ? `yes, ${slots} audio slot(s)` : "no (no audio slots)"}`);
+    } catch (e) {
+      console.log("  capabilities: failed", e instanceof RingApiError ? e.status : e);
     }
     try {
       const history = await getEventHistory(d.id, { maxPages: 1 });

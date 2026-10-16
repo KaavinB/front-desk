@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { verifySignature } from "@/lib/ring/verify";
 import { RingWebhookSchema } from "@/lib/ring/types";
@@ -57,30 +57,35 @@ export async function POST(req: Request) {
   const fresh = await appendEntry(entry);
   if (!fresh) return NextResponse.json({ ok: true, duplicate: true });
 
-  // Fire-and-forget: snapshot, greeting and notifications must not delay the 200.
+  // Snapshot, greeting and notifications run after the 200 is sent. `after` keeps
+  // the serverless function alive until they finish instead of freezing it mid-task.
   if (decision.lane !== "device") {
-    void attachSnapshot(entry.id);
+    after(() => attachSnapshot(entry.id));
     // Greet expected visitors only: a courier or a stranger gets no "take a seat".
     if (decision.lane === "appointment") {
-      void greetVisitor()
-        .then((r) =>
-          updateEntry(entry.id, {
-            greeted: {
-              played: r.played,
-              detail: r.played ? `${r.clip} on ${r.chime}` : r.reason + (r.detail ? `: ${r.detail}` : ""),
-              at: new Date().toISOString(),
-            },
-          }),
-        )
-        .catch((err) => console.error("greeting failed", err));
+      after(() =>
+        greetVisitor()
+          .then((r) =>
+            updateEntry(entry.id, {
+              greeted: {
+                played: r.played,
+                detail: r.played ? `${r.clip} on ${r.chime}` : r.reason + (r.detail ? `: ${r.detail}` : ""),
+                at: new Date().toISOString(),
+              },
+            }),
+          )
+          .catch((err) => console.error("greeting failed", err)),
+      );
     }
-    void composeNotice(decision, officeName())
-      .then(async ({ text, writer }) => {
-        await updateEntry(entry.id, { notice: { text, writer } });
-        const sent = await notifySlack(text);
-        if (sent) await updateEntry(entry.id, { notified: [{ channel: "slack", at: new Date().toISOString() }] });
-      })
-      .catch((err) => console.error("notify failed", err));
+    after(() =>
+      composeNotice(decision, officeName())
+        .then(async ({ text, writer }) => {
+          await updateEntry(entry.id, { notice: { text, writer } });
+          const sent = await notifySlack(text);
+          if (sent) await updateEntry(entry.id, { notified: [{ channel: "slack", at: new Date().toISOString() }] });
+        })
+        .catch((err) => console.error("notify failed", err)),
+    );
   }
 
   return NextResponse.json({ ok: true, id: entry.id, lane: decision.lane, headline: decision.headline });

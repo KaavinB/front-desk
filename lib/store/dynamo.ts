@@ -5,6 +5,7 @@ import {
   PutCommand,
   ScanCommand,
   BatchWriteCommand,
+  UpdateCommand,
 } from "@aws-sdk/lib-dynamodb";
 import type { LogEntry, Store } from "./types";
 
@@ -73,12 +74,35 @@ export function dynamoStore(tableName: string, region = process.env.AWS_REGION ?
       return true;
     },
 
+    // Set only the patched fields, server-side, so concurrent background tasks
+    // (snapshot, notice, greeting) can't overwrite each other's results.
     async updateEntry(id, patch) {
-      const current = await get(id);
-      if (!current) return null;
-      const next = { ...current, ...patch };
-      await doc.send(new PutCommand({ TableName: tableName, Item: { pk: evtKey(id), eventAt: next.eventAt, entry: next } }));
-      return next;
+      const keys = Object.keys(patch).filter((k) => patch[k as keyof LogEntry] !== undefined);
+      if (keys.length === 0) return get(id);
+      const names: Record<string, string> = { "#e": "entry" };
+      const values: Record<string, unknown> = {};
+      const sets = keys.map((k, i) => {
+        names[`#k${i}`] = k;
+        values[`:v${i}`] = patch[k as keyof LogEntry];
+        return `#e.#k${i} = :v${i}`;
+      });
+      try {
+        const res = await doc.send(
+          new UpdateCommand({
+            TableName: tableName,
+            Key: { pk: evtKey(id) },
+            UpdateExpression: `SET ${sets.join(", ")}`,
+            ConditionExpression: "attribute_exists(pk)",
+            ExpressionAttributeNames: names,
+            ExpressionAttributeValues: values,
+            ReturnValues: "ALL_NEW",
+          }),
+        );
+        return (res.Attributes?.entry as LogEntry | undefined) ?? null;
+      } catch (e) {
+        if ((e as { name?: string }).name === "ConditionalCheckFailedException") return null;
+        throw e;
+      }
     },
 
     async clearEntries() {

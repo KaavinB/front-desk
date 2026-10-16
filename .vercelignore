@@ -1,0 +1,10 @@
+# Never upload local secrets or local data to Vercel builds.
+.env
+.env.*
+!.env.example
+data/events.json
+data/snapshots
+node_modules
+.next
+docs
+tests

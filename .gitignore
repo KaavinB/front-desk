@@ -8,3 +8,6 @@ data/events.json
 data/snapshots/
 *.log
 .DS_Store
+.vercel
+.env*
+!.env.example

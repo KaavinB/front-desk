@@ -26,6 +26,7 @@ export type LogEntry = {
  */
 const dataDir = () => process.env.DATA_DIR ?? "./data";
 const file = () => path.join(dataDir(), "events.json");
+const lockDir = () => `${file()}.lock`;
 
 let writing: Promise<void> = Promise.resolve();
 
@@ -40,14 +41,45 @@ async function readAll(): Promise<LogEntry[]> {
 
 async function writeAll(entries: LogEntry[]): Promise<void> {
   await fs.mkdir(dataDir(), { recursive: true });
-  const tmp = `${file()}.tmp`;
+  const tmp = `${file()}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(entries, null, 2));
   await fs.rename(tmp, file());
 }
 
-/** Serialize writes so concurrent webhooks don't clobber each other. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const LOCK_STALE_MS = 5000;
+
+/**
+ * Cross-instance lock via an atomic mkdir. The Next dev server loads this module
+ * once per route bundle, so an in-process mutex alone is not enough: two route
+ * handlers can read-modify-write the same file at once and lose entries.
+ */
+async function withLock<T>(fn: () => Promise<T>): Promise<T> {
+  await fs.mkdir(dataDir(), { recursive: true });
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    try {
+      await fs.mkdir(lockDir());
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      const age = Date.now() - (await fs.stat(lockDir()).then((s) => s.mtimeMs, () => Date.now()));
+      if (age > LOCK_STALE_MS) await fs.rmdir(lockDir()).catch(() => undefined);
+      if (Date.now() > deadline) throw new Error("store lock timeout");
+      await sleep(15 + Math.random() * 30);
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    await fs.rmdir(lockDir()).catch(() => undefined);
+  }
+}
+
+/** Serialize writes in-process, then across module instances/processes. */
 function serialized<T>(fn: () => Promise<T>): Promise<T> {
-  const p = writing.then(fn, fn);
+  const run = () => withLock(fn);
+  const p = writing.then(run, run);
   writing = p.then(() => undefined, () => undefined);
   return p;
 }

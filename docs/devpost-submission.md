@@ -11,6 +11,10 @@ Paste from here if the form ever loses its contents.
 - **Built with:** ring, amazon-dynamodb, next.js, typescript, slack, vercel, amazon-web-services
 - **Open Source mini challenge:** No
 - **Friction log:** https://github.com/KaavinB/front-desk/blob/master/docs/friction-log.md
+- **Submitter:** Individual · Organization N/A · United States · Canada province N/A
+- **Project testing link:** https://front-desk-sooty.vercel.app
+- **AI tools leveraged:** Claude Code (Anthropic): idea research and competitive analysis, Ring Partner API exploration, writing and testing the code, deployment, and browser automation for setup tasks. Ring Appstore MCP server: documentation search from the editor.
+- **Level of learning / AI value for career:** *(your answer)*
 
 ## AWS Builder Mini Challenge — which AWS services and how
 

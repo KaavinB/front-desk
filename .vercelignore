@@ -8,3 +8,4 @@ node_modules
 .next
 docs
 tests
+video/out

@@ -11,3 +11,6 @@ data/snapshots/
 .vercel
 .env*
 !.env.example
+
+# demo video output
+video/out/

@@ -15,3 +15,6 @@ data/snapshots/
 # demo video output
 video/out/
 *.tsbuildinfo
+
+# your own narration recordings (not committed)
+video/voice/

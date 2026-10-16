@@ -38,21 +38,56 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Scene = {
   id: string;
+  /** What's on screen during this line (for the recording script). */
+  screen: string;
   say: string;
   /** Runs when the scene starts, while the narration plays. */
-  act: (page: Page) => Promise<void>;
+  act: (page: Page, dur: number) => Promise<void>;
   /** Extra hold after the narration ends, seconds. */
   hold?: number;
 };
 
-function synth(id: string, text: string): { file: string; dur: number } {
-  const file = path.join(OUT, "voice", `${id}.aiff`);
-  execFileSync("say", ["-v", VOICE, "-r", RATE, "-o", file, text]);
-  const dur = Number(
-    execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString(),
-  );
-  return { file, dur };
+const MY_VOICE = path.resolve("video/voice");
+const AUDIO_EXT = [".m4a", ".wav", ".mp3", ".aiff", ".caf", ".aac"];
+
+const probe = (file: string) =>
+  Number(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file]).toString());
+
+/**
+ * Your own recording of a line wins: drop `video/voice/<scene id>.m4a` (or .wav,
+ * .mp3…) and the scene is timed to it. It's cleaned up first: leading/trailing
+ * silence trimmed, rumble filtered, loudness evened out. Lines without a
+ * recording fall back to the macOS voice.
+ */
+function synth(id: string, text: string): { file: string; dur: number; mine: boolean } {
+  const own = AUDIO_EXT.map((e) => path.join(MY_VOICE, `${id}${e}`)).find(existsSync);
+  const file = path.join(OUT, "voice", `${id}.wav`);
+  if (own) {
+    const trim = "silenceremove=start_periods=1:start_silence=0.08:start_threshold=-42dB";
+    execFileSync("ffmpeg", [
+      "-y", "-loglevel", "error", "-i", own,
+      "-af", `${trim},areverse,${trim},areverse,highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=11`,
+      "-ar", "48000", "-ac", "1", file,
+    ]);
+    return { file, dur: probe(file), mine: true };
+  }
+  const aiff = path.join(OUT, "voice", `${id}.aiff`);
+  execFileSync("say", ["-v", VOICE, "-r", RATE, "-o", aiff, text]);
+  return { file: aiff, dur: probe(aiff), mine: false };
 }
+
+const tc = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = s - m * 60;
+  return `${m}:${sec.toFixed(1).padStart(4, "0")}`;
+};
+const srtTime = (s: number) => {
+  const ms = Math.round(s * 1000);
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  const sec = Math.floor((ms % 60_000) / 1000);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(ms % 1000).padStart(3, "0")}`;
+};
 
 /* ---------------- doorbell ---------------- */
 
@@ -102,12 +137,14 @@ async function waitForCard(page: Page, text: string) {
 const scenes: Scene[] = [
   {
     id: "01-title",
+    screen: "Title slide: “Every small office has a doorbell.”",
     say: "Every small office has a doorbell. Almost none of them has a receptionist.",
     act: (p) => showSlide(p, slides.title),
     hold: 0.6,
   },
   {
     id: "02-problem",
+    screen: "Problem slide: three numbered pains and the kiosk price",
     say:
       "Therapists, dentists, law firms. A locked front door, and nobody watching it. Clients wait outside, couriers give up, " +
       "and staff get pulled out of sessions to check a camera. The kiosk systems built for this cost hundreds of dollars a month, " +
@@ -117,6 +154,7 @@ const scenes: Scene[] = [
   },
   {
     id: "03-intro",
+    screen: "The dashboard appears, empty, with the live Ring status in the top right",
     say:
       "Front Desk turns the Ring doorbell an office already has into its receptionist. It reads today's appointment calendar, " +
       "and when the bell rings, it tells the right person who is there.",
@@ -124,6 +162,7 @@ const scenes: Scene[] = [
   },
   {
     id: "04-maria",
+    screen: "Maria Chen's card appears at the top",
     say:
       "Nine o'clock. Maria rings. Front Desk matches her booking, pulls a frame from the door through the Ring API, " +
       "and tells Doctor Lee in Slack: your nine o'clock, Maria Chen, rang the bell.",
@@ -136,6 +175,7 @@ const scenes: Scene[] = [
   },
   {
     id: "05-courier",
+    screen: "A Delivery card appears",
     say: "A package is dropped off. Ring tags it as a delivery, so it's logged, and nobody is interrupted.",
     act: async (p) => {
       await ring("motion_detected", at("09:55"), "package_delivery");
@@ -144,6 +184,7 @@ const scenes: Scene[] = [
   },
   {
     id: "06-tom",
+    screen: "Tom Okafor's card appears",
     say: "Ten o'clock. Tom. Same thing.",
     act: async (p) => {
       await ring("button_press", at("10:03"));
@@ -153,6 +194,7 @@ const scenes: Scene[] = [
   },
   {
     id: "07-unexpected",
+    screen: "A red-outlined “Not on the calendar” card appears",
     say:
       "Eleven thirty. Someone rings, and nothing is on the calendar. That one is flagged, with the frame, " +
       "so staff can decide before they open the door.",
@@ -164,13 +206,14 @@ const scenes: Scene[] = [
   },
   {
     id: "08-double",
+    screen: "The 2:00 double-booking card appears; about 5 s later “It's J. Lee” is clicked",
     say:
       "Two o'clock is double booked. Front Desk doesn't pretend to know who it is. It shows both names, " +
       "and the host confirms with one tap. That keeps the visitor log honest, and it means no facial recognition, which Ring prohibits.",
-    act: async (p) => {
+    act: async (p, dur) => {
       await ring("button_press", at("13:58"));
       await waitForCard(p, "2:00 PM slot");
-      await sleep(5200);
+      await sleep(Math.max(2500, dur * 0.42 * 1000)); // around "the host confirms with one tap"
       const btn = p.getByRole("button", { name: "It's J. Lee" });
       await btn.hover();
       await sleep(500);
@@ -180,6 +223,7 @@ const scenes: Scene[] = [
   },
   {
     id: "09-after",
+    screen: "A purple After hours card appears",
     say: "And a ring at seven in the evening is logged quietly. Nobody is woken up.",
     act: async (p) => {
       await ring("button_press", at("19:00"));
@@ -189,6 +233,7 @@ const scenes: Scene[] = [
   },
   {
     id: "10-sidebar",
+    screen: "Hold on the dashboard; the sidebar shows who has arrived",
     say:
       "On the right, today's appointments update as people arrive, and the latest frame from the front door is always one glance away.",
     act: async (p) => {
@@ -198,6 +243,7 @@ const scenes: Scene[] = [
   },
   {
     id: "11-arch",
+    screen: "How-it-works slide: four boxes",
     say:
       "Under the hood, Ring sends a signed webhook. We verify the signature, drop duplicates, and reply in milliseconds. " +
       "A small, unit tested matcher checks the calendar. No AI model ever decides who is at the door. " +
@@ -207,6 +253,7 @@ const scenes: Scene[] = [
   },
   {
     id: "12-honest",
+    screen: "“What's live, and what's simulated” slide",
     say:
       "One honest note. Ring's developer Playground gives us a real virtual doorbell for the API, but no way to press it. " +
       "So the rings in this demo come from our own simulator, signed exactly like Ring's webhooks, and sent to the same endpoint. " +
@@ -216,6 +263,7 @@ const scenes: Scene[] = [
   },
   {
     id: "13-close",
+    screen: "Closing slide with the live URL and repo",
     say: "Front Desk. Your Ring doorbell already knows your two o'clock is here. Now it can say so.",
     act: (p) => showSlide(p, slides.close),
     hold: 2.5,
@@ -224,15 +272,46 @@ const scenes: Scene[] = [
 
 /* ---------------- run ---------------- */
 
+/** The recording script: one line per clip, with what's on screen. */
+async function writeScript() {
+  const parts = [
+    "# Front Desk demo: narration script",
+    "",
+    "Record each line as its own clip and save it in `video/voice/` with the file name shown",
+    "(`.m4a` from QuickTime or Voice Memos is fine; `.wav` and `.mp3` work too). Then run",
+    "`npm run video`. The video is re-timed to your clips, so speak naturally: pauses and pace are yours.",
+    "",
+    "Tips: quiet room, laptop mic about a forearm's length away, one or two takes per line,",
+    "a beat of silence before and after is fine (it's trimmed). Any line you skip uses the computer voice.",
+    "Rephrase freely, but keep the facts.",
+    "",
+  ];
+  scenes.forEach((s, i) => {
+    parts.push(`## ${i + 1}. \`${s.id}.m4a\``, "", `*On screen:* ${s.screen}`, "", `> ${s.say}`, "");
+  });
+  await writeFile(path.resolve("video/NARRATION.md"), parts.join("\n"));
+}
+
 async function main() {
+  if (process.argv.includes("--script")) {
+    await writeScript();
+    console.log("Wrote video/NARRATION.md");
+    return;
+  }
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(path.join(OUT, "voice"), { recursive: true });
   mkdirSync(path.join(OUT, "raw"), { recursive: true });
+  mkdirSync(MY_VOICE, { recursive: true });
 
-  console.log(`Narration (${VOICE} @ ${RATE} wpm)…`);
   const voice = scenes.map((s) => ({ ...s, ...synth(s.id, s.say) }));
+  const mine = voice.filter((v) => v.mine).length;
   const spoken = voice.reduce((a, s) => a + s.dur + (s.hold ?? 0.3), 0);
-  console.log(`  ${voice.length} clips, ~${spoken.toFixed(0)} s of narration`);
+  console.log(
+    `Narration: ${mine} of ${voice.length} lines in your voice` +
+      (mine < voice.length ? `, ${voice.length - mine} by ${VOICE}` : "") +
+      ` · ~${spoken.toFixed(0)} s`,
+  );
+  if (spoken > 175) console.warn(`  ⚠ ${spoken.toFixed(0)} s is close to the 3:00 limit; tighten a few lines.`);
 
   console.log("Warming up the app…");
   for (const p of ["/", "/api/events", "/api/calendar", "/api/ring/status"]) await fetch(`${BASE}${p}`);
@@ -281,7 +360,7 @@ async function main() {
     const start = (Date.now() - t0) / 1000;
     cues.push({ file: s.file, at: start });
     process.stdout.write(`  ${s.id.padEnd(14)} @ ${start.toFixed(1)} s\n`);
-    await s.act(page);
+    await s.act(page, s.dur);
     const end = start + s.dur + (s.hold ?? 0.3);
     const wait = end * 1000 - (Date.now() - t0);
     if (wait > 0) await sleep(wait);
@@ -340,6 +419,18 @@ async function main() {
   );
 
   if (!existsSync(outFile)) throw new Error("ffmpeg produced no file");
+
+  // Extras for editing by hand: a picture-only cut and subtitles at the final timings.
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", outFile, "-an", "-c:v", "copy", path.join(OUT, "front-desk-demo-silent.mp4")]);
+  const srt = voice
+    .map((s, i) => {
+      const a = Math.max(0, cues[i].at - trim);
+      return `${i + 1}\n${srtTime(a)} --> ${srtTime(a + s.dur)}\n${s.say}\n`;
+    })
+    .join("\n");
+  await writeFile(path.join(OUT, "front-desk-demo.srt"), srt);
+  console.log("Timings:");
+  voice.forEach((s, i) => console.log(`  ${tc(Math.max(0, cues[i].at - trim)).padStart(7)}  ${s.id}${s.mine ? "  (you)" : ""}`));
   const dur = execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", outFile]).toString().trim();
   console.log(`Done: ${outFile} (${Number(dur).toFixed(1)} s)`);
 }

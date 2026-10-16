@@ -14,3 +14,4 @@ data/snapshots/
 
 # demo video output
 video/out/
+*.tsbuildinfo

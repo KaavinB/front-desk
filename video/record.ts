@@ -319,7 +319,7 @@ async function main() {
   const delays = cues
     .map((c, i) => `[${i + 1}:a]aresample=48000,adelay=${Math.round(Math.max(0, c.at - trim) * 1000)}:all=1[a${i}]`)
     .join(";");
-  const mix = `${cues.map((_, i) => `[a${i}]`).join("")}amix=inputs=${cues.length}:normalize=0,volume=1.6[aout]`;
+  const mix = `${cues.map((_, i) => `[a${i}]`).join("")}amix=inputs=${cues.length}:normalize=0,volume=1.5,alimiter=limit=0.89[aout]`;
 
   execFileSync(
     "ffmpeg",

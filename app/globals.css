@@ -1,0 +1,64 @@
+:root {
+  --bg: #f6f5f2;
+  --card: #ffffff;
+  --ink: #1b1b1f;
+  --muted: #6b6f76;
+  --line: #e6e4df;
+  --appointment: #1f6f5f;
+  --courier: #8a6d1f;
+  --unexpected: #b4472b;
+  --after_hours: #4b4f8a;
+  --device: #6b6f76;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15161a;
+    --card: #1f2127;
+    --ink: #ececec;
+    --muted: #9a9ea6;
+    --line: #2d3038;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+h1 { font-size: 22px; margin: 0; }
+.sub { color: var(--muted); font-size: 14px; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--device);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.card[data-lane="appointment"] { border-left-color: var(--appointment); }
+.card[data-lane="courier"] { border-left-color: var(--courier); }
+.card[data-lane="unexpected"] { border-left-color: var(--unexpected); }
+.card[data-lane="after_hours"] { border-left-color: var(--after_hours); }
+.row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.lane { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.headline { font-size: 17px; margin: 4px 0 6px; }
+.meta { color: var(--muted); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+button {
+  font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer;
+}
+button.primary { background: var(--appointment); border-color: var(--appointment); color: #fff; }
+.confirmed { color: var(--appointment); font-size: 13px; margin-top: 8px; }
+.empty { color: var(--muted); text-align: center; padding: 48px 0; }
+.badge {
+  font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 10px; white-space: nowrap;
+}
+.badge.on { color: var(--appointment); border-color: var(--appointment); }
+.badge.off { color: var(--unexpected); border-color: var(--unexpected); }
+.snap { display: block; width: 100%; max-width: 420px; border-radius: 8px; margin-top: 10px; border: 1px solid var(--line); }
+code { font-size: 13px; background: var(--bg); padding: 2px 6px; border-radius: 4px; }

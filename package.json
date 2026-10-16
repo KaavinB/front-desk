@@ -1,0 +1,31 @@
+{
+  "name": "front-desk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Your Ring doorbell is your receptionist. Appointment-aware visitor alerts for small offices, built on the Ring Partner API.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "simulate": "tsx scripts/simulate.ts",
+    "ring:probe": "tsx scripts/ring-probe.ts"
+  },
+  "dependencies": {
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "dotenv": "^16.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

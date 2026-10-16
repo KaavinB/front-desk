@@ -14,7 +14,7 @@ Paste from here if the form ever loses its contents.
 - **Submitter:** Individual · Organization N/A · United States · Canada province N/A
 - **Project testing link:** https://front-desk-sooty.vercel.app
 - **AI tools leveraged:** Claude Code (Anthropic): idea research and competitive analysis, Ring Partner API exploration, writing and testing the code, deployment, and browser automation for setup tasks. Ring Appstore MCP server: documentation search from the editor.
-- **Level of learning / AI value for career:** *(your answer)*
+- **Level of learning:** Significant · **AI value for career:** Yes
 
 ## AWS Builder Mini Challenge — which AWS services and how
 
